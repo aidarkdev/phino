@@ -19,8 +19,6 @@ jobs:
             artifact: phino-linux-x86_64
           - os: macos-15
             artifact: phino-macos-arm64
-          - os: macos-13
-            artifact: phino-macos-x86_64
           - os: windows-2022
             artifact: phino-windows-x86_64.exe
     runs-on: ${{ matrix.os }}
@@ -43,7 +41,7 @@ jobs:
       - name: Build
         run: |
           cabal update
-          cabal build -O2 exe:phino
+          cabal build exe:phino
       - name: Collect binary (Unix)
         if: runner.os != 'Windows'
         run: |
