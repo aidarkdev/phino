@@ -71,4 +71,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release create "${{ github.ref_name }}" dist-release/* --generate-notes
+        run: gh release create "${{ github.ref_name }}" dist-release/* --generate-notes --latest
