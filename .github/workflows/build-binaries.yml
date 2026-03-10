@@ -1,0 +1,76 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 Objectionary.com
+# SPDX-License-Identifier: MIT
+---
+# yamllint disable rule:line-length
+name: Build binaries
+'on':
+  push:
+    tags:
+      - '*'
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            artifact: phino-linux-x86_64
+          - os: macos-15
+            artifact: phino-macos-arm64
+          - os: macos-13
+            artifact: phino-macos-x86_64
+          - os: windows-2022
+            artifact: phino-windows-x86_64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: setup
+        uses: haskell-actions/setup@v2.10.3
+        with:
+          ghc-version: '9.6.7'
+          cabal-version: '3.12.1.0'
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ${{ steps.setup.outputs.ghc-path }}
+            ${{ steps.setup.outputs.cabal-path }}
+            ${{ steps.setup.outputs.cabal-store }}
+            dist-newstyle
+          key: ${{ runner.os }}-${{ runner.arch }}-cabal-${{ hashFiles('**/*.cabal') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-cabal-
+      - name: Build
+        run: |
+          cabal update
+          cabal build -O2 exe:phino
+      - name: Collect binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p dist-release
+          cp "$(cabal list-bin phino)" dist-release/${{ matrix.artifact }}
+          chmod +x dist-release/${{ matrix.artifact }}
+      - name: Collect binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-release | Out-Null
+          $bin = (cabal list-bin phino).Trim()
+          Copy-Item $bin dist-release\${{ matrix.artifact }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist-release/${{ matrix.artifact }}
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist-release
+          merge-multiple: true
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "${{ github.ref_name }}" dist-release/* --generate-notes
