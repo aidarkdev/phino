@@ -4,7 +4,9 @@
 # yamllint disable rule:line-length
 name: Release binary
 'on':
-  workflow_dispatch:
+  push:
+    tags:
+      - '*'
 jobs:
   build-and-release:
     strategy:
