@@ -2,19 +2,14 @@
 # SPDX-License-Identifier: MIT
 ---
 # yamllint disable rule:line-length
-# Here we use macos-14-large as x86-64 arch instead of macos-15-intel
-# because of the bug in haskell-actions/setup plugin.
-# For more details see this: https://github.com/haskell-actions/setup/issues/77
-name: Release binary to S3
+name: Release binary
 'on':
-  push:
-    tags:
-      - '*'
+  workflow_dispatch:
 jobs:
   build-and-release:
     strategy:
       matrix:
-        os: [macos-15, ubuntu-22.04, macos-14-large]
+        os: [macos-15, ubuntu-22.04, windows-latest]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -41,20 +36,23 @@ jobs:
         run: |
           cabal update
           cabal build
-      - name: Copy binary
+      - name: Copy binary (Unix)
+        if: runner.os != 'Windows'
         run: |
           mkdir -p dist-release
-          cp "$(cabal list-bin phino)" dist-release/phino
-          chmod +x dist-release/phino
-      - name: Upload phino binary to Amazon S3
-        uses: aws-actions/configure-aws-credentials@v6.0.0
+          cp "$(cabal list-bin phino)" dist-release/phino-${{ matrix.os }}
+          chmod +x dist-release/phino-${{ matrix.os }}
+      - name: Copy binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-release
+          Copy-Item "$(cabal list-bin phino)" dist-release/phino-${{ matrix.os }}.exe
+      - name: Upload binary to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          aws-access-key-id: ${{ secrets.S3_KEY }}
-          aws-secret-access-key: ${{ secrets.S3_SECRET }}
-          aws-region: ${{ secrets.S3_REGION }}
-      - name: Upload phino binary to S3
-        run: |
-          aws s3 cp dist-release/phino s3://${{ secrets.S3_BUCKET }}/releases/${{ matrix.os }}/phino-0.${{ github.ref_name }} --acl public-read
-      - name: Upload as phino-latest
-        run: |
-          aws s3 cp dist-release/phino s3://${{ secrets.S3_BUCKET }}/releases/${{ matrix.os }}/phino-latest --acl public-read
+          tag_name: latest
+          name: Latest Build
+          files: dist-release/phino-${{ matrix.os }}*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
